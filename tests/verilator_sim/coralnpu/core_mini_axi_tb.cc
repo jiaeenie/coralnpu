@@ -599,3 +599,31 @@ void CoreMiniAxi_tb::axi_transaction_done_cb_(TLMTrafficGenerator* gen,
 }
 
 CoreMiniAxi_tb* CoreMiniAxi_tb::singleton_ = nullptr;
+
+std::vector<uint8_t> CoreMiniAxi_tb::ReadMemorySync(uint32_t addr, uint32_t size) {
+  // Allocate buffer
+  mem_read_buffer_.resize(size);
+  std::fill(mem_read_buffer_.begin(), mem_read_buffer_.end(), 0);
+
+  // For external memory (0x20000000+), read directly from xbar
+  // This is the only memory region we can dump because it's stored in the Xbar's
+  // internal array. ITCM/DTCM are internal to the core and not directly accessible.
+  if (addr >= Xbar::memory_base_addr() &&
+      (addr + size) <= (Xbar::memory_base_addr() + Xbar::memory_size())) {
+    uint32_t mem_offset = addr - Xbar::memory_base_addr();
+    for (size_t i = 0; i < size; i++) {
+      mem_read_buffer_[i] = xbar_.memory()[mem_offset + i];
+    }
+    LOG(INFO) << "ReadMemorySync: Read " << size << " bytes from external memory at 0x"
+              << std::hex << addr << std::dec;
+  } else {
+    LOG(WARNING) << "ReadMemorySync: Cannot access memory at 0x"
+                 << std::hex << addr << std::dec << ". "
+                 << "Only external memory (0x" << std::hex << Xbar::memory_base_addr()
+                 << " - 0x" << (Xbar::memory_base_addr() + Xbar::memory_size())
+                 << std::dec << ") can be dumped. "
+                 << "Program should store results in external memory for verification.";
+  }
+
+  return mem_read_buffer_;
+}

@@ -32,6 +32,11 @@ class Xbar : sc_core::sc_module {
 
   tlm_utils::simple_target_socket<Xbar>& socket() { return socket_; }
 
+  // Direct memory access for testbench memory dump
+  const uint8_t* memory() const { return memory_; }
+  static constexpr uint32_t memory_base_addr() { return kMemoryAddr; }
+  static constexpr size_t memory_size() { return kMemorySizeBytes; }
+
   void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
     sc_dt::uint64 addr = trans.get_address();
     unsigned int len = trans.get_data_length();

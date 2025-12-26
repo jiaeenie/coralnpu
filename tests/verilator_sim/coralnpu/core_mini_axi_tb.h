@@ -202,6 +202,9 @@ struct CoreMiniAxi_tb : Sysc_tb {
   void EnqueueTransactionSync(std::vector<DataTransfer> transfers);
   void EnqueueTransactionAsync(std::vector<DataTransfer> transfers);
 
+  // Read memory via AXI slave interface (can read ITCM, DTCM, or external memory)
+  std::vector<uint8_t> ReadMemorySync(uint32_t addr, uint32_t size);
+
  protected:
   void posedge() override;
 
@@ -252,5 +255,9 @@ struct CoreMiniAxi_tb : Sysc_tb {
 
   bool instr_trace_ = false;
   InstructionTrace tracer_;
+
+  // Memory dump state
+  std::vector<uint8_t> mem_read_buffer_;
+  uint32_t mem_read_offset_ = 0;
 };
 #endif  // TESTS_VERILATOR_SIM_CORALNPU_CORE_MINI_AXI_TB_H_
