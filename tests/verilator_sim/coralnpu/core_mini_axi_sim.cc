@@ -44,12 +44,21 @@ ABSL_FLAG(bool, debug_axi, false, "Enable AXI traffic debugging");
 ABSL_FLAG(bool, instr_trace, false, "Log instructions to console");
 ABSL_FLAG(std::string, dump_mem, "",
           "Dump memory after halt (format: addr:size:file, e.g., 0x10080:128:output.bin)");
+ABSL_FLAG(std::string, preload_mem, "",
+          "Preload memory before execution (format: addr:file, e.g., 0x20000000:input.bin)");
 
 // Memory dump configuration
 struct MemDumpConfig {
   bool enabled = false;
   uint32_t addr = 0;
   uint32_t size = 0;
+  std::string file;
+};
+
+// Memory preload configuration
+struct MemPreloadConfig {
+  bool enabled = false;
+  uint32_t addr = 0;
   std::string file;
 };
 
@@ -83,9 +92,34 @@ static MemDumpConfig ParseDumpMemFlag(const std::string& flag) {
   return config;
 }
 
+static MemPreloadConfig ParsePreloadMemFlag(const std::string& flag) {
+  MemPreloadConfig config;
+  if (flag.empty()) return config;
+
+  std::vector<std::string> parts = absl::StrSplit(flag, ':');
+  if (parts.size() != 2) {
+    LOG(ERROR) << "Invalid --preload_mem format. Expected addr:file (e.g., 0x20000000:input.bin)";
+    return config;
+  }
+
+  // Parse hex address
+  if (parts[0].substr(0, 2) == "0x" || parts[0].substr(0, 2) == "0X") {
+    config.addr = std::stoul(parts[0], nullptr, 16);
+  } else {
+    config.addr = std::stoul(parts[0], nullptr, 10);
+  }
+
+  config.file = parts[1];
+  config.enabled = true;
+  LOG(INFO) << "Memory preload configured: addr=0x" << std::hex << config.addr
+            << " file=" << config.file;
+  return config;
+}
+
 static bool run(const char* name, const std::string binary, const int cycles,
                 const bool trace, const bool debug_axi, const bool instr_trace,
-                const MemDumpConfig& dump_config) {
+                const MemDumpConfig& dump_config,
+                const MemPreloadConfig& preload_config) {
   absl::Mutex halted_mtx;
   absl::CondVar halted_cv;
   CoreMiniAxi_tb tb(CoreMiniAxi_tb::kCoreMiniAxiModelName, cycles, /* random= */ false, debug_axi,
@@ -102,6 +136,28 @@ static bool run(const char* name, const std::string binary, const int cycles,
   std::thread sc_main_thread([&tb]() { tb.start(); });
 
   CHECK_OK(tb.LoadElfSync(binary));
+
+  // Preload memory if configured
+  if (preload_config.enabled) {
+    FILE* f = fopen(preload_config.file.c_str(), "rb");
+    if (f) {
+      fseek(f, 0, SEEK_END);
+      size_t file_size = ftell(f);
+      fseek(f, 0, SEEK_SET);
+      std::vector<uint8_t> data(file_size);
+      size_t read = fread(data.data(), 1, file_size, f);
+      fclose(f);
+      if (read == file_size) {
+        tb.WriteMemorySync(preload_config.addr, data);
+        LOG(INFO) << "Preloaded " << file_size << " bytes to 0x" << std::hex << preload_config.addr;
+      } else {
+        LOG(ERROR) << "Failed to read preload file: " << preload_config.file;
+      }
+    } else {
+      LOG(ERROR) << "Failed to open preload file: " << preload_config.file;
+    }
+  }
+
   CHECK_OK(tb.ClockGateSync(false));
   CHECK_OK(tb.ResetAsync(false));
 
@@ -113,6 +169,9 @@ static bool run(const char* name, const std::string binary, const int cycles,
   if (!tb.io_fault && !tb.tohost_halt) {
     CHECK_OK(tb.CheckStatusSync());
   }
+
+  // Report cycle count
+  printf("\nCYCLES: %u\n", tb.get_cycle_count());
 
   // Read memory dump via AXI before stopping simulation
   std::vector<uint8_t> mem_data;
@@ -154,9 +213,10 @@ extern "C" int sc_main(int argc, char** argv) {
   }
 
   MemDumpConfig dump_config = ParseDumpMemFlag(absl::GetFlag(FLAGS_dump_mem));
+  MemPreloadConfig preload_config = ParsePreloadMemFlag(absl::GetFlag(FLAGS_preload_mem));
 
   return run(Sysc_tb::get_name(argv[0]), absl::GetFlag(FLAGS_binary),
       absl::GetFlag(FLAGS_cycles), absl::GetFlag(FLAGS_trace),
       absl::GetFlag(FLAGS_debug_axi), absl::GetFlag(FLAGS_instr_trace),
-      dump_config) ? 0 : 1;
+      dump_config, preload_config) ? 0 : 1;
 }

@@ -198,12 +198,16 @@ struct CoreMiniAxi_tb : Sysc_tb {
   absl::Status CheckStatusAsync();
 
   VERILATOR_MODEL* core() { return core_.get(); }
+  uint32_t get_cycle_count() { return cycle(); }
 
   void EnqueueTransactionSync(std::vector<DataTransfer> transfers);
   void EnqueueTransactionAsync(std::vector<DataTransfer> transfers);
 
   // Read memory via AXI slave interface (can read ITCM, DTCM, or external memory)
   std::vector<uint8_t> ReadMemorySync(uint32_t addr, uint32_t size);
+
+  // Write memory (for preloading test data into external memory)
+  void WriteMemorySync(uint32_t addr, const std::vector<uint8_t>& data);
 
  protected:
   void posedge() override;

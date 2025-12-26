@@ -627,3 +627,22 @@ std::vector<uint8_t> CoreMiniAxi_tb::ReadMemorySync(uint32_t addr, uint32_t size
 
   return mem_read_buffer_;
 }
+
+void CoreMiniAxi_tb::WriteMemorySync(uint32_t addr, const std::vector<uint8_t>& data) {
+  // For external memory (0x20000000+), write directly to xbar
+  if (addr >= Xbar::memory_base_addr() &&
+      (addr + data.size()) <= (Xbar::memory_base_addr() + Xbar::memory_size())) {
+    uint32_t mem_offset = addr - Xbar::memory_base_addr();
+    for (size_t i = 0; i < data.size(); i++) {
+      xbar_.memory_mutable()[mem_offset + i] = data[i];
+    }
+    LOG(INFO) << "WriteMemorySync: Wrote " << data.size() << " bytes to external memory at 0x"
+              << std::hex << addr << std::dec;
+  } else {
+    LOG(WARNING) << "WriteMemorySync: Cannot write to memory at 0x"
+                 << std::hex << addr << std::dec << ". "
+                 << "Only external memory (0x" << std::hex << Xbar::memory_base_addr()
+                 << " - 0x" << (Xbar::memory_base_addr() + Xbar::memory_size())
+                 << std::dec << ") can be written.";
+  }
+}

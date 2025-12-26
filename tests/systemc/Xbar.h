@@ -32,8 +32,9 @@ class Xbar : sc_core::sc_module {
 
   tlm_utils::simple_target_socket<Xbar>& socket() { return socket_; }
 
-  // Direct memory access for testbench memory dump
+  // Direct memory access for testbench memory dump/preload
   const uint8_t* memory() const { return memory_; }
+  uint8_t* memory_mutable() { return memory_; }
   static constexpr uint32_t memory_base_addr() { return kMemoryAddr; }
   static constexpr size_t memory_size() { return kMemorySizeBytes; }
 
