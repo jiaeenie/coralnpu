@@ -40,8 +40,14 @@ bazel build //examples:coralnpu_v2_hello_world_add_floats
 # Build the Simulator (non-RVV for shorter build time):
 bazel build //tests/verilator_sim:core_mini_axi_sim
 
+# Build the RVV-capable Simulator (required for vector instructions):
+bazel build //tests/verilator_sim:rvv_core_mini_axi_sim
+
 # Run the binary on the simulator:
 bazel-bin/tests/verilator_sim/core_mini_axi_sim --binary bazel-out/k8-fastbuild-ST-dd8dc713f32d/bin/examples/coralnpu_v2_hello_world_add_floats.elf
+
+# Run with RVV support:
+bazel-bin/tests/verilator_sim/rvv_core_mini_axi_sim --binary your_rvv_binary.elf
 ```
 
 
